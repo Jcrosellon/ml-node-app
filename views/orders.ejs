@@ -1,0 +1,225 @@
+<style>
+    body {
+        font-family: 'Segoe UI', sans-serif;
+        background: linear-gradient(145deg, #fffde7, #ffe600);
+        background-attachment: fixed;
+        padding: 40px 20px;
+        color: #333;
+    }
+
+    h1 {
+        font-size: 40px;
+        margin-bottom: 25px;
+        text-align: center;
+        color: #222;
+    }
+
+    h2.order-header {
+        background-color: #343a40;
+        color: #fff;
+        padding: 4px 7px;
+        margin-top: 0%;
+        border-radius: 6px;
+        font-size: 18px;
+    }
+
+    h3 {
+        margin: 10px 0 4px;
+        color: #222;
+        font-size: 16px;
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        margin-bottom: 20px;
+        border-radius: 6px;
+        overflow: hidden;
+    }
+
+    th {
+        background-color: #3483fa;
+        color: white;
+        padding: 12px;
+        text-align: left;
+        font-size: 14px;
+    }
+
+    td {
+        background-color: white;
+        padding: 10px;
+        font-size: 13px;
+        border-bottom: 1px solid #eee;
+    }
+
+    .pagination {
+        text-align: center;
+        margin-top: 40px;
+    }
+
+    .pagination a {
+        margin: 0 10px;
+        text-decoration: none;
+        color: #68a4ff;
+        font-weight: bold;
+        font-size: 16px;
+    }
+
+    .pagination strong {
+        font-size: 16px;
+        margin: 0 10px;
+        color: #333;
+    }
+</style>
+
+
+<h1>📦 Órdenes recibidas</h1>
+<form method="GET" action="/orders" style="text-align: center; margin-bottom: 30px;">
+    <!-- búsqueda -->
+    <input type="text" name="q" placeholder="🔍 Buscar por nombre o #orden"
+        value="<%= typeof query !== 'undefined' ? query : '' %>"
+        style="padding: 10px; font-size: 16px; width: 300px; border-radius: 6px; border: 1px solid #ccc;">
+    
+    <!-- días -->
+    <input type="number" name="days" placeholder="Días hacia atrás" min="1" max="30"
+        value="<%= typeof days !== 'undefined' ? days : 1 %>"
+        style="padding: 10px; font-size: 16px; width: 180px; border-radius: 6px; border: 1px solid #ccc; margin-left: 10px;">
+    
+    <button type="submit"
+        style="padding: 10px 20px; font-size: 16px; background-color: #3483fa; color: white; border: none; border-radius: 6px; margin-left: 10px;">Buscar</button>
+</form>
+
+
+
+<% orders.forEach(order=> { %>
+    <h2 class="order-header">Cliente: <%= order.buyer %> – Factura N° <%= order.invoiceNumber %>
+    </h2>
+
+    </h2>
+
+
+
+    <!-- TABLA 1: Resumen -->
+    <h3>Resumen del pedido</h3>
+    <table border="1" style="background: gold; width: 100%; margin-bottom: 15px;">
+        <tr>
+            <th># Orden</th>
+            <th>Fecha</th>
+            <th>NombreCliente</th>
+            <th>TipoDctoIdentificacion</th>
+            <th>Identificación</th>
+            <th>Dirección</th>
+            <th>Cargos Por Venta</th>
+            <th>Costo Envío</th>
+        </tr>
+        <tr>
+            <td>
+                <%= order.id %>
+            </td>
+            <td>
+                <%= order.date %>
+            </td>
+            <td>
+                <%= order.billingInfo.name %>
+            </td>
+            <td>
+                <%= order.billingInfo.id_type %>
+            </td>
+            <td>
+                <%= order.billingInfo.id_number %>
+            </td>
+            <td>
+                <%= order.billingInfo.address %>
+            </td>
+            <td>
+                <%= (order.cargosPorVenta || 0).toLocaleString('es-CO', { style: 'currency' , currency: 'COP' }) %>
+            </td>
+
+            <td>
+                <%= order.costoEnvio.toLocaleString('es-CO', { style: 'currency' , currency: 'COP' }) %>
+            </td>
+        </tr>
+    </table>
+
+
+    </tr>
+
+    </table>
+
+    <!-- TABLA 3: Detalle de productos -->
+    <h3>Detalle de productos</h3>
+    <table border="1" style="background: gold; width: 100%; margin-bottom: 15px;">
+        <tr>
+            <th># Orden</th>
+            <th>SKU vendedor</th>
+            <th>SKU ML</th>
+            <th>Producto</th>
+            <th>Cantidad</th>
+            <th>VlrUnitario</th>
+        </tr>
+        <% order.items.forEach(item=> { %>
+            <tr>
+                <td>
+                    <%= order.id %>
+                </td>
+                <td>
+  <%= item.sku.includes('⚠️') ? '❌ No definido' : item.sku %>
+</td>
+
+  <td><%= item.sku_meli.includes('⚠️') ? '❌ No definido' : item.sku_meli %></td>
+
+
+                <td>
+                    <%= item.title %>
+                </td>
+                <td>
+                    <%= item.quantity %>
+                </td>
+                <td>
+                    <%= item.unit_price %>
+                </td>
+            </tr>
+            <% }) %>
+    </table>
+
+
+    <!-- TABLA 4: Retenciones -->
+    <h3>Retenciones</h3>
+    <table border="1" style="background: gold; width: 100%; margin-bottom: 40px;">
+        <tr>
+            <th># Orden</th>
+            <th>NombreImpuesto</th>
+            <th>Valor</th>
+        </tr>
+        <% order.taxes.forEach(tax=> { %>
+            <tr>
+                <td>
+                    <%= order.id %>
+                </td>
+                <td>
+                    <%= tax.name %>
+                </td>
+                <td>
+                    <%= tax.value.toLocaleString('es-CO', { style: 'currency' , currency: 'COP' }) %>
+                </td>
+            </tr>
+            <% }) %>
+    </table>
+
+
+
+
+    <% }) %>
+        <div class="pagination">
+
+            <% if (page> 1) { %>
+                <a href="/orders?page=<%= page - 1 %>">⬅️ Anterior</a>
+                <% } %>
+
+                    <strong>Página <%= page %> de <%= totalPages %></strong>
+
+                    <% if (page < totalPages) { %>
+                        <a href="/orders?page=<%= page + 1 %>">Siguiente ➡️</a>
+                        <% } %>
+        </div>
