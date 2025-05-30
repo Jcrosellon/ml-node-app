@@ -158,22 +158,24 @@ async function saveTaxes(orderId, taxes) {
     try {
         const pool = await sql.connect(config);
 
+        // Solo eliminar impuestos existentes una vez por orden
+        await pool.request()
+            .input('order_id', sql.Numeric, orderId)
+            .query(`DELETE FROM orders.order_taxes WHERE order_id = @order_id`);
+
         for (const tax of taxes) {
             const taxValue = typeof tax.value === 'number'
                 ? tax.value
                 : parseFloat(tax.value?.toString().replace(/[^\d.-]/g, '')) || 0;
-            await pool.request()
-                .input('order_id', sql.Numeric, orderId)
-                .query(`DELETE FROM orders.order_taxes WHERE order_id = @order_id`);
 
             await pool.request()
                 .input('order_id', sql.Numeric, orderId)
                 .input('tax_name', sql.VarChar(200), tax.name)
                 .input('tax_value', sql.Numeric, taxValue)
                 .query(`
-          INSERT INTO orders.order_taxes (order_id, tax_name, tax_value)
-          VALUES (@order_id, @tax_name, @tax_value)
-        `);
+                  INSERT INTO orders.order_taxes (order_id, tax_name, tax_value)
+                  VALUES (@order_id, @tax_name, @tax_value)
+                `);
         }
     } catch (err) {
         console.error(`❌ Error al guardar impuestos para la orden ${orderId}:`, err);

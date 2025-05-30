@@ -101,7 +101,7 @@ app.get('/orders', async (req, res) => {
         await clearAllOrderData();
 
         // Calcular rango de fechas
-        const days = parseInt(req.query.days) || 1;
+        const days = parseInt(req.query.days) || 30;
         const desde = new Date();
         desde.setDate(desde.getDate() - days);
         const hasta = new Date();
@@ -110,7 +110,7 @@ app.get('/orders', async (req, res) => {
         const isoDateTo = hasta.toISOString();
 
         let allOrders = [];
-        let totalPages = 1;
+
         const limit = 50;
         let offset = 0;
 
@@ -134,7 +134,8 @@ app.get('/orders', async (req, res) => {
             const created = new Date(order.date_created);
             return created >= desde && created <= hasta;
         });
-
+        // 💡 Evita sobrecarga en tiempo de desarrollo
+        allOrders = allOrders.slice(0, 500); // <-- prueba con 30 o 50 primero
         const totalOrders = allOrders.length;
 
         const orders = await Promise.all(allOrders.map(async (order, i) => {
@@ -299,6 +300,8 @@ app.get('/orders', async (req, res) => {
         }));
 
 
+        const query = req.query.q || '';
+
         let filteredOrders = orders;
 
         if (query) {
@@ -310,19 +313,29 @@ app.get('/orders', async (req, res) => {
         }
 
 
+
+        const page = parseInt(req.query.page) || 1;
+        const perPage = 50; // Número de órdenes por página
+        const totalPages = Math.ceil(orders.length / perPage);
+        const start = (page - 1) * perPage;
+        const end = start + perPage;
+        const paginatedOrders = orders.slice(start, end);
+
         res.render('orders', {
-            orders: filteredOrders,
+            orders: paginatedOrders,
             page,
-            totalPages: Math.ceil(totalOrders / limit),
-            query, // 👈 esto permite mantener el texto del input
-            days // 👈 esto permite mantener el valor de días
+            totalPages,
+            query,
+            days
         });
 
 
+
     } catch (err) {
-        // console.error(err.response?.data || err);
-        // res.send("Error al obtener órdenes");
+        console.error("❌ Error en /orders:", err.message || err);
+        res.status(500).send("Error al obtener órdenes: " + (err.message || 'Error desconocido'));
     }
+
 });
 
 

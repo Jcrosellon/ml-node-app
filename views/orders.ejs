@@ -80,12 +80,12 @@
     <input type="text" name="q" placeholder="🔍 Buscar por nombre o #orden"
         value="<%= typeof query !== 'undefined' ? query : '' %>"
         style="padding: 10px; font-size: 16px; width: 300px; border-radius: 6px; border: 1px solid #ccc;">
-    
+
     <!-- días -->
     <input type="number" name="days" placeholder="Días hacia atrás" min="1" max="30"
         value="<%= typeof days !== 'undefined' ? days : 1 %>"
         style="padding: 10px; font-size: 16px; width: 180px; border-radius: 6px; border: 1px solid #ccc; margin-left: 10px;">
-    
+
     <button type="submit"
         style="padding: 10px 20px; font-size: 16px; background-color: #3483fa; color: white; border: none; border-radius: 6px; margin-left: 10px;">Buscar</button>
 </form>
@@ -93,9 +93,8 @@
 
 
 <% orders.forEach(order=> { %>
-    <h2 class="order-header">Cliente: <%= order.buyer %> – Factura N° <%= order.invoiceNumber %>
-    </h2>
 
+    <h2 class="order-header">Cliente: <%= order.buyer %> – Factura N° <%= order.invoiceNumber %>
     </h2>
 
 
@@ -143,10 +142,6 @@
     </table>
 
 
-    </tr>
-
-    </table>
-
     <!-- TABLA 3: Detalle de productos -->
     <h3>Detalle de productos</h3>
     <table border="1" style="background: gold; width: 100%; margin-bottom: 15px;">
@@ -164,10 +159,12 @@
                     <%= order.id %>
                 </td>
                 <td>
-  <%= item.sku.includes('⚠️') ? '❌ No definido' : item.sku %>
-</td>
+                    <%= item.sku.includes('⚠️') ? '❌ No definido' : item.sku %>
+                </td>
 
-  <td><%= item.sku_meli.includes('⚠️') ? '❌ No definido' : item.sku_meli %></td>
+                <td>
+                    <%= item.sku_meli.includes('⚠️') ? '❌ No definido' : item.sku_meli %>
+                </td>
 
 
                 <td>
@@ -184,42 +181,34 @@
     </table>
 
 
-    <!-- TABLA 4: Retenciones -->
-    <h3>Retenciones</h3>
-    <table border="1" style="background: gold; width: 100%; margin-bottom: 40px;">
+   <!-- TABLA 4: Retenciones -->
+<h3>Retenciones</h3>
+<table border="1" style="background: gold; width: 100%; margin-bottom: 40px;">
+    <tr>
+        <th># Orden</th>
+        <th>NombreImpuesto</th>
+        <th>Valor</th>
+    </tr>
+    <% order.taxes.forEach(tax=> { %>
         <tr>
-            <th># Orden</th>
-            <th>NombreImpuesto</th>
-            <th>Valor</th>
+            <td><%= order.id %></td>
+            <td><%= tax.name %></td>
+            <td><%= tax.value.toLocaleString('es-CO', { style: 'currency' , currency: 'COP' }) %></td>
         </tr>
-        <% order.taxes.forEach(tax=> { %>
-            <tr>
-                <td>
-                    <%= order.id %>
-                </td>
-                <td>
-                    <%= tax.name %>
-                </td>
-                <td>
-                    <%= tax.value.toLocaleString('es-CO', { style: 'currency' , currency: 'COP' }) %>
-                </td>
-            </tr>
-            <% }) %>
-    </table>
-
-
-
-
     <% }) %>
-        <div class="pagination">
+</table>
 
-            <% if (page> 1) { %>
-                <a href="/orders?page=<%= page - 1 %>">⬅️ Anterior</a>
-                <% } %>
+<% }) %> <!-- cierre del forEach principal -->
 
-                    <strong>Página <%= page %> de <%= totalPages %></strong>
+<div class="pagination">
+    <% if (page > 1) { %>
+        <a href="/orders?page=<%= page - 1 %>&days=<%= days %><%= query ? '&q=' + query : '' %>">⬅️ Anterior</a>
+    <% } %>
 
-                    <% if (page < totalPages) { %>
-                        <a href="/orders?page=<%= page + 1 %>">Siguiente ➡️</a>
-                        <% } %>
-        </div>
+    <strong>Página <%= page %> de <%= totalPages %></strong>
+
+    <% if (page < totalPages) { %>
+        <a href="/orders?page=<%= page + 1 %>&days=<%= days %><%= query ? '&q=' + query : '' %>">Siguiente ➡️</a>
+    <% } %>
+</div>
+
