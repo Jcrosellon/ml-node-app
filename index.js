@@ -65,7 +65,7 @@ app.get('/', (req, res) => {
 // Callback de autorización para obtener el token
 app.get('/callback', async (req, res) => {
     const code = req.query.code;
-    const days = parseInt(req.query.days) || 20; // 💡 Agrega el param days (default 7)
+    const days = parseInt(req.query.days) || 2; // 💡 Agrega el param days (default 7)
     if (!code) return res.status(400).json({ error: "No se recibió código" });
 
     try {
