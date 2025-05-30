@@ -19,7 +19,6 @@ async function clearAllOrderData() {
     try {
         const pool = await sql.connect(config);
         await pool.request().query(`
-            DELETE FROM orders.order_taxes;
             DELETE FROM orders.order_items;
             DELETE FROM orders.orders;
         `);
@@ -81,7 +80,6 @@ async function saveOrder(order) {
         await pool.request()
             .input('id', sql.Numeric, order.id)
             .query(`
-        DELETE FROM orders.order_taxes WHERE order_id = @id;
         DELETE FROM orders.order_items WHERE order_id = @id;
         DELETE FROM orders.orders WHERE id = @id;
       `);
@@ -99,15 +97,16 @@ async function saveOrder(order) {
             .input('costo_envio', sql.Numeric, order.costoEnvio)
             .input('status', sql.VarChar(20), order.status)
             .input('ciudad', sql.VarChar(100), order.ciudad)
+            .input('departamento', sql.VarChar(100), order.departamento)
             .query(`
         INSERT INTO orders.orders (
   id, buyer_name, nombre_cliente, buyer_id_type, buyer_id_number,
   buyer_address, date_created,
-  cargos_por_venta, costo_envio, status, ciudad
+  cargos_por_venta, costo_envio, status, ciudad, departamento
 ) VALUES (
   @id, @buyer_name, @nombre_cliente, @buyer_id_type, @buyer_id_number,
   @buyer_address, @date_created,
-  @cargos_por_venta, @costo_envio, @status, @ciudad
+  @cargos_por_venta, @costo_envio, @status, @ciudad, @departamento
 );
 
       `);
@@ -152,43 +151,10 @@ async function saveItems(orderId, items) {
 }
 
 
-
-
-async function saveTaxes(orderId, taxes) {
-    try {
-        const pool = await sql.connect(config);
-
-        // Solo eliminar impuestos existentes una vez por orden
-        await pool.request()
-            .input('order_id', sql.Numeric, orderId)
-            .query(`DELETE FROM orders.order_taxes WHERE order_id = @order_id`);
-
-        for (const tax of taxes) {
-            const taxValue = typeof tax.value === 'number'
-                ? tax.value
-                : parseFloat(tax.value?.toString().replace(/[^\d.-]/g, '')) || 0;
-
-            await pool.request()
-                .input('order_id', sql.Numeric, orderId)
-                .input('tax_name', sql.VarChar(200), tax.name)
-                .input('tax_value', sql.Numeric, taxValue)
-                .query(`
-                  INSERT INTO orders.order_taxes (order_id, tax_name, tax_value)
-                  VALUES (@order_id, @tax_name, @tax_value)
-                `);
-        }
-    } catch (err) {
-        console.error(`❌ Error al guardar impuestos para la orden ${orderId}:`, err);
-    }
-}
-
-
-
 module.exports = {
     saveTokenToDB,
     getLatestTokenFromDB,
     saveOrder,
     saveItems,
-    saveTaxes,
     clearAllOrderData 
 };
