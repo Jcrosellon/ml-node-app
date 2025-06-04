@@ -62,9 +62,9 @@ async function saveOrder(order) {
 // console.log(`🕵️ Revisando date_created crudo para orden ${order.id}:`, order.date_created);
 
      const dateCreated = order.date_created instanceof Date && !isNaN(order.date_created)
-  ? new Date(DateTime.fromJSDate(order.date_created, { zone: 'utc' })
+  ? DateTime.fromJSDate(order.date_created, { zone: 'utc' })
       .setZone('America/Bogota')
-      .toFormat('yyyy-MM-dd'))
+      .toFormat('yyyy-MM-dd')
   : null;
 
 
@@ -150,11 +150,29 @@ async function saveItems(orderId, items) {
     }
 }
 
+async function saveDepartmentCity(department, city) {
+    try {
+        const pool = await sql.connect(config);
+        await pool.request()
+            .input('department', sql.VarChar(100), department)
+            .input('city', sql.VarChar(100), city)
+            .query(`
+                INSERT INTO list.departmentcity (department, city)
+                VALUES (@department, @city)
+            `);
+        console.log(`✅ Insertado: ${department} - ${city}`);
+    } catch (err) {
+        console.error(`❌ Error al guardar ciudad ${city} del departamento ${department}:`, err.message);
+    }
+}
+
+
 
 module.exports = {
     saveTokenToDB,
     getLatestTokenFromDB,
     saveOrder,
     saveItems,
-    clearAllOrderData 
+    clearAllOrderData,
+    saveDepartmentCity 
 };

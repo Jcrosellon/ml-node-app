@@ -2,7 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
 const app = express();
-const { saveTokenToDB, getLatestTokenFromDB, saveOrder, saveItems, clearAllOrderData } = require('./db');
+const { saveTokenToDB, getLatestTokenFromDB, saveOrder, saveItems, clearAllOrderData, saveDepartmentCity} = require('./db');
 const { DateTime } = require('luxon');
 
 const CLIENT_ID = process.env.CLIENT_ID;
@@ -65,7 +65,7 @@ app.get('/', (req, res) => {
 // Callback de autorización para obtener el token
 app.get('/callback', async (req, res) => {
     const code = req.query.code;
-    const days = parseInt(req.query.days) || 2; // 💡 Agrega el param days (default 7)
+    const days = parseInt(req.query.days) || 20; // 💡 Agrega el param days (default 7)
     if (!code) return res.status(400).json({ error: "No se recibió código" });
 
     try {
@@ -262,6 +262,31 @@ const isoDateTo = hasta.toISO();
 
     return orders;
 }
+
+// 🚀 Nueva ruta para traer e insertar departamentos y ciudades
+app.get('/fetch-departments-cities', async (req, res) => {
+    try {
+        const countryRes = await axios.get('https://api.mercadolibre.com/classified_locations/countries/CO');
+        const departments = countryRes.data.states;
+
+        for (const dept of departments) {
+            const stateId = dept.id;
+            const stateName = dept.name;
+
+            const citiesRes = await axios.get(`https://api.mercadolibre.com/classified_locations/states/${stateId}`);
+            const cities = citiesRes.data.cities;
+
+            for (const city of cities) {
+                await saveDepartmentCity(stateName, city.name);
+            }
+        }
+
+        res.json({ message: 'Departamentos y ciudades insertados correctamente.' });
+    } catch (err) {
+        console.error('❌ Error al traer ciudades y departamentos:', err.message);
+        res.status(500).json({ error: 'Error al traer ciudades y departamentos' });
+    }
+});
 
 
 app.listen(3000, () => {
