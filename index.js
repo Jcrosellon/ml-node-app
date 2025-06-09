@@ -2,7 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
 const app = express();
-const { saveTokenToDB, getLatestTokenFromDB, saveOrder, saveItems, clearAllOrderData, saveDepartmentCity} = require('./db');
+const { saveTokenToDB, getLatestTokenFromDB, saveOrder, saveItems, clearAllOrderData, saveDepartmentCity } = require('./db');
 const { DateTime } = require('luxon');
 
 const CLIENT_ID = process.env.CLIENT_ID;
@@ -65,7 +65,6 @@ app.get('/', (req, res) => {
 // Callback de autorización para obtener el token
 app.get('/callback', async (req, res) => {
     const code = req.query.code;
-    const days = parseInt(req.query.days) || 20; // 💡 Agrega el param days (default 7)
     if (!code) return res.status(400).json({ error: "No se recibió código" });
 
     try {
@@ -83,12 +82,8 @@ app.get('/callback', async (req, res) => {
         tokens = response.data;
         await saveTokenToDB(tokens.access_token);
 
-        // 🚀 Llama con días
-        const orders = await fetchOrders(tokens.access_token, tokens.user_id, days);
-
         res.json({
-            message: `Token guardado y órdenes obtenidas correctamente para los últimos ${days} días`,
-            orders
+            message: `✅ Token guardado correctamente. Ejecuta la importación desde consola con: node index.js import [days]`
         });
     } catch (err) {
         console.error(err);
@@ -96,15 +91,16 @@ app.get('/callback', async (req, res) => {
     }
 });
 
+
 async function fetchOrders(access_token, user_id, days = 3) {
     await clearAllOrderData();
 
     const hoy = DateTime.now().setZone('America/Bogota').startOf('day');
-const desde = hoy.minus({ days: days - 1 }); // Incluye hoy como día completo
-const hasta = hoy.endOf('day');
+    const desde = hoy.minus({ days: days - 1 }); // Incluye hoy como día completo
+    const hasta = hoy.endOf('day');
 
-const isoDateFrom = desde.toISO();
-const isoDateTo = hasta.toISO();
+    const isoDateFrom = desde.toISO();
+    const isoDateTo = hasta.toISO();
 
 
     let allOrders = [];
@@ -126,9 +122,9 @@ const isoDateTo = hasta.toISO();
     }
 
     allOrders = allOrders.filter(order => {
-    const created = DateTime.fromISO(order.date_created).setZone('America/Bogota');
-    return created >= desde && created <= hasta;
-});
+        const created = DateTime.fromISO(order.date_created).setZone('America/Bogota');
+        return created >= desde && created <= hasta;
+    });
 
 
     const orders = await Promise.all(allOrders.map(async (order) => {
@@ -190,14 +186,19 @@ const isoDateTo = hasta.toISO();
             name: 'No disponible',
             id_type: 'No disponible',
             id_number: 'No disponible',
-            address: 'No disponible'
+            address: 'No disponible',
+            email: 'No disponible'
         };
+
 
         try {
             const billingRes = await axios.get(`https://api.mercadolibre.com/orders/${order.id}/billing_info`, {
-                headers: { Authorization: `Bearer ${access_token}`, 'x-version': '2' }
-            });
-            const info = billingRes.data?.buyer?.billing_info;
+  headers: { Authorization: `Bearer ${access_token}`, 'x-version': '2' }
+});
+const info = billingRes.data?.buyer?.billing_info;
+const email = info?.email || info?.attributes?.email || null;
+
+   
             if (info && info.identification && info.address) {
                 billingInfo = {
                     name: [info.name, info.last_name].filter(Boolean).join(' ').trim() || 'Desconocido',
@@ -207,12 +208,19 @@ const isoDateTo = hasta.toISO();
                         info?.address?.street_name,
                         info?.address?.street_number,
                         info?.address?.city_name
-                    ].filter(Boolean).join(' ').trim() || 'Sin dirección'
+                    ].filter(Boolean).join(' ').trim() || 'Sin dirección',
+                    email: info?.email || info?.attributes?.email || 'No disponible'
                 };
             }
         } catch (err) {
             console.warn(`⚠️ No se pudo obtener billing_info para la orden ${order.id}: ${err.message}`);
+            if (err.response && err.response.data) {
+                console.log(`🔎 Respuesta completa de billing_info para orden ${order.id} (error):`);
+                console.log(JSON.stringify(err.response.data, null, 2));
+            }
         }
+
+
 
         let costoEnvio = 0;
         let ciudad = null;
@@ -238,6 +246,7 @@ const isoDateTo = hasta.toISO();
             buyer_id_type: billingInfo.id_type,
             buyer_id_number: billingInfo.id_number,
             buyer_address: billingInfo.address,
+            buyer_email: billingInfo.email,
             cargos_por_venta: cargosPorVenta,
             costoEnvio,
             ciudad,
@@ -250,8 +259,8 @@ const isoDateTo = hasta.toISO();
             id: order.id,
             buyer: buyerName,
             date: DateTime.fromISO(order.date_created)
-             .setZone('America/Bogota')
-             .toFormat('yyyy-MM-dd HH:mm:ss'),  
+                .setZone('America/Bogota')
+                .toFormat('yyyy-MM-dd HH:mm:ss'),
             total: totalNumber,
             cargosPorVenta,
             costoEnvio,
@@ -292,3 +301,45 @@ app.get('/fetch-departments-cities', async (req, res) => {
 app.listen(3000, () => {
     console.log('Servidor corriendo en http://localhost:3000');
 });
+
+/**
+ * 🚀 Importador para programar o correr manualmente
+ * Se ejecuta desde consola con: node index.js import [days]
+ */
+async function runImport(days = 3) {
+    try {
+        const access_token = await getLatestTokenFromDB();
+        if (!access_token) {
+            console.error("❌ No hay un token válido en la base de datos. Primero ejecuta el flujo de autenticación.");
+            process.exit(1);
+        }
+
+        // 🚨 Obtener el user_id (Mercado Libre)
+        let user_id;
+        try {
+            const meRes = await axios.get('https://api.mercadolibre.com/users/me', {
+                headers: { Authorization: `Bearer ${access_token}` }
+            });
+            user_id = meRes.data.id;
+            console.log(`🆔 User ID de Mercado Libre: ${user_id}`);
+        } catch (err) {
+            console.error("❌ Error al obtener el user_id de Mercado Libre:", err.message);
+            process.exit(1);
+        }
+
+        // 🚀 Ejecutar fetchOrders con token y user_id
+        const orders = await fetchOrders(access_token, user_id, days);
+        console.log(`✅ Proceso finalizado. Se insertaron ${orders.length} órdenes en la base de datos.`);
+    } catch (err) {
+        console.error("❌ Error al importar órdenes:", err.message);
+    } finally {
+        process.exit(0);
+    }
+}
+
+
+// 🛠️ Ejecutar desde consola con: node index.js import [days]
+if (process.argv[2] === 'import') {
+    const days = parseInt(process.argv[3]) || 3;
+    runImport(days);
+}
