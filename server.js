@@ -13,8 +13,9 @@ app.get('/', (req, res) => {
 });
 
 app.get('/callback', async (req, res) => {
-    // Aquí tu lógica para recibir el código y guardar el token
+    res.send("✅ Callback recibido. Procesa el token aquí.");
 });
+
 
 app.listen(3000, () => {
     console.log('Servidor corriendo en http://localhost:3000');

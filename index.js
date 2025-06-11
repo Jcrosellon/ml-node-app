@@ -330,11 +330,15 @@ app.listen(3000, () => {
 
 async function runImport(days = 3) {
   try {
-    const tokensFromDB = await getLatestTokenFromDB();
-    if (!tokensFromDB || !tokensFromDB.access_token) {
-      console.error("❌ No hay un token válido en la base de datos. Primero ejecuta el flujo de autenticación.");
-      return;
-    }
+   const tokensFromDB = await getLatestTokenFromDB();
+if (!tokensFromDB || !tokensFromDB.access_token) {
+  console.error("❌ No hay un token válido en la base de datos.");
+  const authURL = `https://auth.mercadolibre.com.co/authorization?response_type=code&client_id=${CLIENT_ID}&redirect_uri=${REDIRECT_URI}`;
+  console.log(`🔗 Abre este enlace en el navegador para autorizar tu app:\n${authURL}`);
+  console.log("📥 Luego de autorizar, se guardará el token automáticamente.");
+  return;
+}
+
 
     let access_token = tokensFromDB.access_token;
     let user_id;

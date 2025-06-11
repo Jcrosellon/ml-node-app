@@ -50,8 +50,8 @@ async function getLatestTokenFromDB() {
     try {
         const pool = await sql.connect(config);
         const result = await pool.request()
-            .query(`SELECT TOP 1 Token FROM conf.token ORDER BY tokenID DESC`);
-        return result.recordset[0]?.Token;
+            .query(`SELECT TOP 1 Token AS access_token, RefreshToken AS refresh_token FROM conf.token ORDER BY tokenID DESC`);
+        return result.recordset[0] || null;
     } catch (err) {
         console.error('❌ Error al obtener token:', err);
         return null;
