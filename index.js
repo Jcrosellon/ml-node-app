@@ -1,9 +1,14 @@
+const sql = require('mssql');
+const config = require('./db').config;  // Ajusta según cómo exportes config en tu db.js
+
+
 require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
 const app = express();
 const { saveTokenToDB, getLatestTokenFromDB, saveOrder, saveItems, clearAllOrderData, saveDepartmentCity } = require('./db');
 const { DateTime } = require('luxon');
+
 
 const CLIENT_ID = process.env.CLIENT_ID;
 const CLIENT_SECRET = process.env.CLIENT_SECRET;
@@ -80,7 +85,8 @@ app.get('/callback', async (req, res) => {
         });
 
         tokens = response.data;
-        await saveTokenToDB(tokens.access_token);
+        await saveTokenToDB(tokens.access_token, tokens.refresh_token);
+
 
         res.json({
             message: `✅ Token guardado correctamente. Ejecuta la importación desde consola con: node index.js import [days]`
@@ -90,6 +96,26 @@ app.get('/callback', async (req, res) => {
         res.status(500).json({ error: "Error al obtener el token o las órdenes" });
     }
 });
+
+
+async function refreshAccessToken(refresh_token) {
+    try {
+        const response = await axios.post('https://api.mercadolibre.com/oauth/token', null, {
+            params: {
+                grant_type: 'refresh_token',
+                client_id: CLIENT_ID,
+                client_secret: CLIENT_SECRET,
+                refresh_token: refresh_token
+            },
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+        });
+        return response.data;
+    } catch (err) {
+        console.error('❌ Error al refrescar el token:', err.message);
+        throw err;
+    }
+}
+
 
 
 async function fetchOrders(access_token, user_id, days = 3) {
@@ -302,39 +328,46 @@ app.listen(3000, () => {
     console.log('Servidor corriendo en http://localhost:3000');
 });
 
-/**
- * 🚀 Importador para programar o correr manualmente
- * Se ejecuta desde consola con: node index.js import [days]
- */
 async function runImport(days = 3) {
-    try {
-        const access_token = await getLatestTokenFromDB();
-        if (!access_token) {
-            console.error("❌ No hay un token válido en la base de datos. Primero ejecuta el flujo de autenticación.");
-            process.exit(1);
-        }
-
-        // 🚨 Obtener el user_id (Mercado Libre)
-        let user_id;
-        try {
-            const meRes = await axios.get('https://api.mercadolibre.com/users/me', {
-                headers: { Authorization: `Bearer ${access_token}` }
-            });
-            user_id = meRes.data.id;
-            console.log(`🆔 User ID de Mercado Libre: ${user_id}`);
-        } catch (err) {
-            console.error("❌ Error al obtener el user_id de Mercado Libre:", err.message);
-            process.exit(1);
-        }
-
-        // 🚀 Ejecutar fetchOrders con token y user_id
-        const orders = await fetchOrders(access_token, user_id, days);
-        console.log(`✅ Proceso finalizado. Se insertaron ${orders.length} órdenes en la base de datos.`);
-    } catch (err) {
-        console.error("❌ Error al importar órdenes:", err.message);
-    } finally {
-        process.exit(0);
+  try {
+    const tokensFromDB = await getLatestTokenFromDB();
+    if (!tokensFromDB || !tokensFromDB.access_token) {
+      console.error("❌ No hay un token válido en la base de datos. Primero ejecuta el flujo de autenticación.");
+      return;
     }
+
+    let access_token = tokensFromDB.access_token;
+    let user_id;
+
+    try {
+      const meRes = await axios.get('https://api.mercadolibre.com/users/me', {
+        headers: { Authorization: `Bearer ${access_token}` }
+      });
+      user_id = meRes.data.id;
+      console.log(`🆔 User ID de Mercado Libre: ${user_id}`);
+    } catch (err) {
+      if (err.response && err.response.status === 401 && tokensFromDB.refresh_token) {
+        console.warn("🔄 Token expirado. Intentando refrescar el token...");
+        const newTokens = await refreshAccessToken(tokensFromDB.refresh_token);
+        access_token = newTokens.access_token;
+        await saveTokenToDB(access_token, newTokens.refresh_token);
+        const meRes = await axios.get('https://api.mercadolibre.com/users/me', {
+          headers: { Authorization: `Bearer ${access_token}` }
+        });
+        user_id = meRes.data.id;
+        console.log(`🆔 User ID de Mercado Libre (después de refrescar): ${user_id}`);
+      } else {
+        console.error("❌ Error al obtener el user_id de Mercado Libre:", err.message);
+        return;
+      }
+    }
+
+    const orders = await fetchOrders(access_token, user_id, days);
+    console.log(`✅ Proceso finalizado. Se insertaron ${orders.length} órdenes en la base de datos.`);
+
+  } catch (err) {
+    console.error("❌ Error al importar órdenes:", err.message);
+  }
 }
 
 

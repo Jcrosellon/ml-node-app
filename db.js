@@ -30,13 +30,17 @@ async function clearAllOrderData() {
 
 
 
-async function saveTokenToDB(token) {
+async function saveTokenToDB(access_token, refresh_token) {
     try {
         const pool = await sql.connect(config);
         await pool.request()
-            .input('token', sql.NVarChar(sql.MAX), token)
-            .query(`INSERT INTO conf.token (Token) VALUES (@token)`);
-        console.log('✅ Token guardado');
+            .input('access_token', sql.NVarChar(sql.MAX), access_token)
+            .input('refresh_token', sql.NVarChar(sql.MAX), refresh_token)
+            .query(`
+                INSERT INTO conf.token (Token, RefreshToken)
+                VALUES (@access_token, @refresh_token)
+            `);
+        console.log('✅ Token y Refresh Token guardados');
     } catch (err) {
         console.error('❌ Error al guardar token:', err);
     }
