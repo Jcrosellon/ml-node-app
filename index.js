@@ -6,15 +6,13 @@ require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
 const app = express();
-const { saveTokenToDB, getLatestTokenFromDB, saveOrder, saveItems, clearAllOrderData, saveDepartmentCity } = require('./db');
+const { saveTokenToDB, getLatestTokenFromDB, saveOrder, saveItems, clearAllOrderData, saveDepartmentCity, saveProducts, clearAllProducts } = require('./db');
 const { DateTime } = require('luxon');
 
 
 const CLIENT_ID = process.env.CLIENT_ID;
 const CLIENT_SECRET = process.env.CLIENT_SECRET;
 const REDIRECT_URI = process.env.REDIRECT_URI;
-
-let tokens = {};
 
 // Ruta de autenticación: devuelve la URL de autenticación en JSON
 app.get('/', (req, res) => {
@@ -219,12 +217,12 @@ async function fetchOrders(access_token, user_id, days = 3) {
 
         try {
             const billingRes = await axios.get(`https://api.mercadolibre.com/orders/${order.id}/billing_info`, {
-  headers: { Authorization: `Bearer ${access_token}`, 'x-version': '2' }
-});
-const info = billingRes.data?.buyer?.billing_info;
-const email = info?.email || info?.attributes?.email || null;
+                headers: { Authorization: `Bearer ${access_token}`, 'x-version': '2' }
+            });
+            const info = billingRes.data?.buyer?.billing_info;
+            const email = info?.email || info?.attributes?.email || null;
 
-   
+
             if (info && info.identification && info.address) {
                 billingInfo = {
                     name: [info.name, info.last_name].filter(Boolean).join(' ').trim() || 'Desconocido',
@@ -329,54 +327,109 @@ app.listen(3000, () => {
 });
 
 async function runImport(days = 3) {
-  try {
-   const tokensFromDB = await getLatestTokenFromDB();
-if (!tokensFromDB || !tokensFromDB.access_token) {
-  console.error("❌ No hay un token válido en la base de datos.");
-  const authURL = `https://auth.mercadolibre.com.co/authorization?response_type=code&client_id=${CLIENT_ID}&redirect_uri=${REDIRECT_URI}`;
-  console.log(`🔗 Abre este enlace en el navegador para autorizar tu app:\n${authURL}`);
-  console.log("📥 Luego de autorizar, se guardará el token automáticamente.");
-  return;
+    try {
+        const tokensFromDB = await getLatestTokenFromDB();
+        if (!tokensFromDB || !tokensFromDB.access_token) {
+            console.error("❌ No hay un token válido en la base de datos.");
+            const authURL = `https://auth.mercadolibre.com.co/authorization?response_type=code&client_id=${CLIENT_ID}&redirect_uri=${REDIRECT_URI}`;
+            console.log(`🔗 Abre este enlace en el navegador para autorizar tu app:\n${authURL}`);
+            console.log("📥 Luego de autorizar, se guardará el token automáticamente.");
+            return;
+        }
+
+
+        let access_token = tokensFromDB.access_token;
+        let user_id;
+
+        try {
+            const meRes = await axios.get('https://api.mercadolibre.com/users/me', {
+                headers: { Authorization: `Bearer ${access_token}` }
+            });
+            user_id = meRes.data.id;
+            console.log(`🆔 User ID de Mercado Libre: ${user_id}`);
+        } catch (err) {
+            if (err.response && err.response.status === 401 && tokensFromDB.refresh_token) {
+                console.warn("🔄 Token expirado. Intentando refrescar el token...");
+                const newTokens = await refreshAccessToken(tokensFromDB.refresh_token);
+                access_token = newTokens.access_token;
+                await saveTokenToDB(access_token, newTokens.refresh_token);
+                const meRes = await axios.get('https://api.mercadolibre.com/users/me', {
+                    headers: { Authorization: `Bearer ${access_token}` }
+                });
+                user_id = meRes.data.id;
+                console.log(`🆔 User ID de Mercado Libre (después de refrescar): ${user_id}`);
+            } else {
+                console.error("❌ Error al obtener el user_id de Mercado Libre:", err.message);
+                return;
+            }
+        }
+
+        const orders = await fetchOrders(access_token, user_id, days);
+        console.log(`✅ Proceso finalizado. Se insertaron ${orders.length} órdenes en la base de datos.`);
+
+    } catch (err) {
+        console.error("❌ Error al importar órdenes:", err.message);
+    }
 }
 
+async function fetchProductsAndSave() {
+    const tokensFromDB = await getLatestTokenFromDB();
+    const access_token = tokensFromDB?.access_token;
 
-    let access_token = tokensFromDB.access_token;
-    let user_id;
-
-    try {
-      const meRes = await axios.get('https://api.mercadolibre.com/users/me', {
-        headers: { Authorization: `Bearer ${access_token}` }
-      });
-      user_id = meRes.data.id;
-      console.log(`🆔 User ID de Mercado Libre: ${user_id}`);
-    } catch (err) {
-      if (err.response && err.response.status === 401 && tokensFromDB.refresh_token) {
-        console.warn("🔄 Token expirado. Intentando refrescar el token...");
-        const newTokens = await refreshAccessToken(tokensFromDB.refresh_token);
-        access_token = newTokens.access_token;
-        await saveTokenToDB(access_token, newTokens.refresh_token);
-        const meRes = await axios.get('https://api.mercadolibre.com/users/me', {
-          headers: { Authorization: `Bearer ${access_token}` }
-        });
-        user_id = meRes.data.id;
-        console.log(`🆔 User ID de Mercado Libre (después de refrescar): ${user_id}`);
-      } else {
-        console.error("❌ Error al obtener el user_id de Mercado Libre:", err.message);
+    if (!access_token) {
+        console.error("❌ No hay token válido.");
         return;
-      }
     }
 
-    const orders = await fetchOrders(access_token, user_id, days);
-    console.log(`✅ Proceso finalizado. Se insertaron ${orders.length} órdenes en la base de datos.`);
+    // Obtener el user_id
+    const meRes = await axios.get("https://api.mercadolibre.com/users/me", {
+        headers: { Authorization: `Bearer ${access_token}` },
+    });
+    const user_id = meRes.data.id;
 
-  } catch (err) {
-    console.error("❌ Error al importar órdenes:", err.message);
-  }
+    // Obtener los items publicados
+    const itemsRes = await axios.get(`https://api.mercadolibre.com/users/${user_id}/items/search`, {
+        headers: { Authorization: `Bearer ${access_token}` },
+    });
+
+    const items = itemsRes.data.results;
+    console.log(`📦 Productos encontrados: ${items.length}`);
+
+    // 🧹 Limpiar la tabla antes de insertar
+    await clearAllProducts();
+
+    for (const itemId of items) {
+        try {
+            const res = await axios.get(`https://api.mercadolibre.com/items/${itemId}`, {
+                headers: { Authorization: `Bearer ${access_token}` },
+            });
+
+            const name = res.data.title || 'Sin nombre';
+            const skumercado = res.data.id;
+
+            const skuAttr = res.data.attributes?.find(a => a.id === 'SELLER_SKU');
+            const skuvendedor = skuAttr?.value_name || 'No definido por el vendedor';
+
+            await saveProducts(name, skumercado, skuvendedor);
+            console.log(`✅ Guardado: ${name}`);
+        } catch (err) {
+            console.warn(`⚠️ Error con item ${itemId}:`, err.message);
+        }
+    }
 }
 
 
-// 🛠️ Ejecutar desde consola con: node index.js import [days]
-if (process.argv[2] === 'import') {
-    const days = parseInt(process.argv[3]) || 3;
+const command = process.argv[2];
+const days = parseInt(process.argv[3]) || 3;
+
+if (command === 'import') {
     runImport(days);
+} else if (command === 'products') {
+    fetchProductsAndSave();
+} else {
+    console.log("❌ Comando no reconocido. Usa:\n - node index.js import [days]\n - node index.js products");
 }
+
+
+
+

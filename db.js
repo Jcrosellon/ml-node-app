@@ -61,45 +61,45 @@ async function getLatestTokenFromDB() {
 // 🔽 FUNCIONES PARA GUARDAR ÓRDENES 🔽
 
 async function saveOrder(order) {
-  try {
-    const pool = await sql.connect(config);
+    try {
+        const pool = await sql.connect(config);
 
-    const dateCreated = order.date_created instanceof Date && !isNaN(order.date_created)
-      ? DateTime.fromJSDate(order.date_created, { zone: 'utc' })
-          .setZone('America/Bogota')
-          .startOf('day')
-          .toJSDate()
-      : null;
+        const dateCreated = order.date_created instanceof Date && !isNaN(order.date_created)
+            ? DateTime.fromJSDate(order.date_created, { zone: 'utc' })
+                .setZone('America/Bogota')
+                .startOf('day')
+                .toJSDate()
+            : null;
 
-    const isValidDate = dateCreated instanceof Date && !isNaN(dateCreated);
+        const isValidDate = dateCreated instanceof Date && !isNaN(dateCreated);
 
-    // 🔥 BORRA datos anteriores completamente por ID
-    await pool.request()
-      .input('id', sql.Numeric, order.id)
-      .query(`
+        // 🔥 BORRA datos anteriores completamente por ID
+        await pool.request()
+            .input('id', sql.Numeric, order.id)
+            .query(`
         DELETE FROM orders.order_items WHERE order_id = @id;
         DELETE FROM orders.orders WHERE id = @id;
       `);
 
 
 
-    // Inserta la orden
-    await pool.request()
-      .input('id', sql.Numeric, order.id)
-      .input('buyer_name', sql.VarChar(200), order.buyer_name)
-      .input('nombre_cliente', sql.VarChar(200), order.nombre_cliente)
-      .input('buyer_id_type', sql.VarChar(20), order.buyer_id_type)
-      .input('buyer_id_number', sql.VarChar(20), order.buyer_id_number)
-      .input('buyer_address', sql.NVarChar(sql.MAX), order.buyer_address)
-      .input('email', sql.VarChar(200), order.buyer_email || null) // 👈 AÑADE ESTO
-      
-      .input('date_created', sql.SmallDateTime, isValidDate ? dateCreated : null)
-      .input('cargos_por_venta', sql.Numeric, order.cargos_por_venta)
-      .input('costo_envio', sql.Numeric, order.costoEnvio)
-      .input('status', sql.VarChar(20), order.status)
-      .input('ciudad', sql.VarChar(100), order.ciudad)
-      .input('departamento', sql.VarChar(100), order.departamento)
-      .query(`
+        // Inserta la orden
+        await pool.request()
+            .input('id', sql.Numeric, order.id)
+            .input('buyer_name', sql.VarChar(200), order.buyer_name)
+            .input('nombre_cliente', sql.VarChar(200), order.nombre_cliente)
+            .input('buyer_id_type', sql.VarChar(20), order.buyer_id_type)
+            .input('buyer_id_number', sql.VarChar(20), order.buyer_id_number)
+            .input('buyer_address', sql.NVarChar(sql.MAX), order.buyer_address)
+            .input('email', sql.VarChar(200), order.buyer_email || null) // 👈 AÑADE ESTO
+
+            .input('date_created', sql.SmallDateTime, isValidDate ? dateCreated : null)
+            .input('cargos_por_venta', sql.Numeric, order.cargos_por_venta)
+            .input('costo_envio', sql.Numeric, order.costoEnvio)
+            .input('status', sql.VarChar(20), order.status)
+            .input('ciudad', sql.VarChar(100), order.ciudad)
+            .input('departamento', sql.VarChar(100), order.departamento)
+            .query(`
         INSERT INTO orders.orders (
           id, buyer_name, nombre_cliente, buyer_id_type, buyer_id_number,
           buyer_address, email, date_created,
@@ -111,9 +111,9 @@ async function saveOrder(order) {
         );
       `);
 
-  } catch (err) {
-    console.error(`❌ Error al guardar la orden ${order.id}:`, err);
-  }
+    } catch (err) {
+        console.error(`❌ Error al guardar la orden ${order.id}:`, err);
+    }
 }
 
 
@@ -165,6 +165,32 @@ async function saveDepartmentCity(department, city) {
     }
 }
 
+async function saveProducts(name, skumercadolibre, skuvendedor) {
+    try {
+        const pool = await sql.connect(config);
+        await pool.request()
+            .input('name', sql.VarChar(200), name)
+            .input('skumercadolibre', sql.VarChar(50), skumercadolibre)
+            .input('skuvendedor', sql.VarChar(100), skuvendedor)
+            .query(`
+        INSERT INTO List.products (name, skumercadolibre, skuvendedor)
+        VALUES (@name, @skumercadolibre, @skuvendedor)
+      `);
+    } catch (err) {
+        console.error('❌ Error al guardar producto:', err.message);
+    }
+}
+
+async function clearAllProducts() {
+    try {
+        const pool = await sql.connect(config);
+        await pool.request().query(`DELETE FROM List.products`);
+        console.log('🧹 Productos limpiados correctamente.');
+    } catch (err) {
+        console.error('❌ Error al limpiar productos:', err.message);
+    }
+}
+
 
 
 
@@ -174,5 +200,7 @@ module.exports = {
     saveOrder,
     saveItems,
     clearAllOrderData,
-    saveDepartmentCity 
+    clearAllProducts,
+    saveDepartmentCity,
+    saveProducts
 };
