@@ -114,6 +114,23 @@ async function refreshAccessToken(refresh_token) {
     }
 }
 
+function splitNombreCompleto(nombreCompleto) {
+    const partes = nombreCompleto.trim().split(/\s+/);
+    let nombre1 = '', nombre2 = '', apellido1 = '', apellido2 = '';
+
+    if (partes.length === 2) {
+        [nombre1, apellido1] = partes;
+    } else if (partes.length === 3) {
+        [nombre1, nombre2, apellido1] = partes;
+    } else if (partes.length >= 4) {
+        [nombre1, nombre2, apellido1, ...resto] = partes;
+        apellido2 = resto.join(' ');
+    } else if (partes.length === 1) {
+        nombre1 = partes[0];
+    }
+
+    return { nombre1, nombre2, apellido1, apellido2 };
+}
 
 
 async function fetchOrders(access_token, user_id, days = 3) {
@@ -260,13 +277,20 @@ async function fetchOrders(access_token, user_id, days = 3) {
         } catch (err) {
             console.warn(`⚠️ No se pudo obtener envío para la orden ${order.id}: ${err.message}`);
         }
+        // Descomponer el nombre completo en nombre1, nombre2, apellido1, apellido2
+        const { nombre1, nombre2, apellido1, apellido2 } = splitNombreCompleto(billingInfo.name || '');
+
+
 
         await saveOrder({
             id: order.id,
             status: order.status,
             date_created: dateCreated,
             buyer_name: buyerName,
-            nombre_cliente: billingInfo.name,
+            nombre1,
+            nombre2,
+            apellido1,
+            apellido2,
             buyer_id_type: billingInfo.id_type,
             buyer_id_number: billingInfo.id_number,
             buyer_address: billingInfo.address,
@@ -276,6 +300,7 @@ async function fetchOrders(access_token, user_id, days = 3) {
             ciudad,
             departamento
         });
+
 
         await saveItems(order.id, items);
 

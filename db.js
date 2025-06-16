@@ -87,7 +87,11 @@ async function saveOrder(order) {
         await pool.request()
             .input('id', sql.Numeric, order.id)
             .input('buyer_name', sql.VarChar(200), order.buyer_name)
-            .input('nombre_cliente', sql.VarChar(200), order.nombre_cliente)
+            .input('nombre1', sql.VarChar(100), order.nombre1)
+            .input('nombre2', sql.VarChar(100), order.nombre2)
+            .input('apellido1', sql.VarChar(100), order.apellido1)
+            .input('apellido2', sql.VarChar(100), order.apellido2)
+
             .input('buyer_id_type', sql.VarChar(20), order.buyer_id_type)
             .input('buyer_id_number', sql.VarChar(20), order.buyer_id_number)
             .input('buyer_address', sql.NVarChar(sql.MAX), order.buyer_address)
@@ -101,11 +105,11 @@ async function saveOrder(order) {
             .input('departamento', sql.VarChar(100), order.departamento)
             .query(`
         INSERT INTO orders.orders (
-          id, buyer_name, nombre_cliente, buyer_id_type, buyer_id_number,
+          id, buyer_name, nombre1, nombre2, apellido1, apellido2, buyer_id_type, buyer_id_number,
           buyer_address, email, date_created,
           cargos_por_venta, costo_envio, status, ciudad, departamento
         ) VALUES (
-          @id, @buyer_name, @nombre_cliente, @buyer_id_type, @buyer_id_number,
+          @id, @buyer_name, @nombre1, @nombre2, @apellido1, @apellido2, @buyer_id_type, @buyer_id_number,
           @buyer_address, @email, @date_created,
           @cargos_por_venta, @costo_envio, @status, @ciudad, @departamento
         );
